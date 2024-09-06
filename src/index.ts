@@ -1,12 +1,11 @@
 import { Markup, Telegraf } from "telegraf";
 import {
   telegramBotToken,
-  backendUrl,
-  channelId,
-  internalApiKey,
+  telegramChannelId,
 } from "./config/env";
-import * as cron from "node-cron";
-import axios from "axios";
+import { CronJob } from "cron";
+import { getMarket } from "./market";
+import { ProductIcon } from "./constants";
 
 const bot = new Telegraf(telegramBotToken);
 bot.start((ctx) =>
@@ -31,99 +30,85 @@ bot.start((ctx) =>
 );
 
 async function postMarketUpdate() {
-  try {
-    const response = await axios.get(`${backendUrl}/markets/internal/NY`, {
-      headers: {
-        "x-api-key": internalApiKey,
-      },
-    });
-    const market = response.data;
+  const currentDate = new Date();
+  const formattedDate = currentDate.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+  });
 
-    const currentDate = new Date();
-    const formattedDate = currentDate.toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-    });
+  let message = `🏙️ <b>Market Update - ${formattedDate}</b> 📊\n\n`;
+  message += "<pre>";
+  message += "#   | Price  | Change \n";
+  message += "----------+--------+--------\n";
 
-    let message = `🏙️ <b>Market Update - ${formattedDate}</b> 📊\n\n`;
-    message += "<pre>";
-    message += "Product   | Price  | Change \n";
-    message += "----------+--------+--------\n";
+  let biggestDecrease = { name: "", change: 0 };
+  let biggestIncrease = { name: "", change: 0 };
 
-    let biggestDecrease = { name: "", change: 0 };
-    let biggestIncrease = { name: "", change: 0 };
+  const market = getMarket(currentDate);
+  for (const product of market.products) {
+    const priceDiff = product.price - product.previousPrice;
+    const changePercent = (priceDiff / product.previousPrice) * 100;
+    const changeEmoji = priceDiff >= 0 ? "🟢" : "🔴";
+    const changeSign = priceDiff >= 0 ? "+" : "";
+    const productIcon = ProductIcon[product.name];
 
-    market.products.forEach((product) => {
-      const priceDiff = product.price - product.previousPrice;
-      const changePercent = (priceDiff / product.previousPrice) * 100;
-      const changeEmoji = priceDiff >= 0 ? "🟢" : "🔴";
-      const changeSign = priceDiff >= 0 ? "+" : "";
+    message += `${productIcon.padEnd(1)} | $${product.price
+      .toFixed(2)
+      .padStart(6)} | ${changeEmoji} ${changeSign}${changePercent.toFixed(
+      2,
+    )}%\n`;
 
-      message += `${product.name.padEnd(9)} | $${product.price
-        .toFixed(2)
-        .padStart(6)} | ${changeEmoji} ${changeSign}${changePercent.toFixed(
-        2,
-      )}%\n`;
-
-      if (changePercent < biggestDecrease.change) {
-        biggestDecrease = { name: product.name, change: changePercent };
-      }
-      if (changePercent > biggestIncrease.change) {
-        biggestIncrease = { name: product.name, change: changePercent };
-      }
-    });
-
-    message += "</pre>\n\n";
-
-    if (biggestDecrease.change < -10) {
-      message += `💡 <b>${
-        biggestDecrease.name
-      }</b> is cheap today (${biggestDecrease.change.toFixed(
-        2,
-      )}% down). You should probably buy!\n\n`;
+    if (changePercent < biggestDecrease.change) {
+      biggestDecrease = { name: product.name, change: changePercent };
     }
-    if (biggestIncrease.change > 10) {
-      message += `🚀 <b>${
-        biggestIncrease.name
-      }</b> price is rocketing (${biggestIncrease.change.toFixed(
-        2,
-      )}% up). Probably time to sell some!\n\n`;
+    if (changePercent > biggestIncrease.change) {
+      biggestIncrease = { name: product.name, change: changePercent };
     }
+  };
 
-    message += "<i>Remember: Buy low, sell high, and dominate the market!</i>";
+  message += "</pre>\n\n";
 
-    await bot.telegram.sendMessage(channelId, message, { parse_mode: "HTML" });
-
-    console.log("Market update posted successfully");
-  } catch (error) {
-    console.error("Error posting market update:", error);
+  if (biggestDecrease.change < -10) {
+    message += `💡 <b>${
+      biggestDecrease.name
+    }</b> is cheap today (${biggestDecrease.change.toFixed(
+      2,
+    )}% down).\n\n`;
   }
+  if (biggestIncrease.change > 10) {
+    message += `🚀 <b>${
+      biggestIncrease.name
+    }</b> price is rocketing (${biggestIncrease.change.toFixed(
+      2,
+    )}% up).\n\n`;
+  }
+
+  await bot.telegram.sendMessage(telegramChannelId, message, { parse_mode: "HTML" });
 }
 
 // Update the cron schedule to run at 22:42 every day
-console.log("Setting up cron job...");
-cron.schedule("42 22 * * *", () => {
-  console.log("Cron job triggered");
-  postMarketUpdate();
-});
+const job = new CronJob(
+  "1 0 * * *",
+  () => {
+    console.log("Cron job triggered");
+    postMarketUpdate();
+  },
+);
 
-bot
-  .launch()
-  .then(() => {
-    console.log("Bot started successfully");
-  })
-  .catch((error) => {
-    console.error("Error starting bot:", error);
-  });
+bot.launch();
+console.log("Bot started successfully");
 
-console.log("Bot initialization completed");
+job.start();
+console.log("Cron job started successfully");
 
 // Enable graceful stop
 process.once("SIGINT", () => {
   console.log("SIGINT received. Stopping bot...");
+  job.stop();
   bot.stop("SIGINT");
 });
 process.once("SIGTERM", () => {
   console.log("SIGTERM received. Stopping bot...");
+  job.stop();
   bot.stop("SIGTERM");
 });
