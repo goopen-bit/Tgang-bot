@@ -87,8 +87,6 @@ async function postMarketUpdate() {
     parse_mode: "HTML",
   });
 }
-// @note let's do a message push when we release so it's sent to the chat
-postMarketUpdate();
 
 const job = new CronJob("1 0 * * *", () => {
   console.log("Cron job triggered");
