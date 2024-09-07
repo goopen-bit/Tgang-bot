@@ -1,8 +1,5 @@
 import { Markup, Telegraf } from "telegraf";
-import {
-  telegramBotToken,
-  telegramChannelId,
-} from "./config/env";
+import { telegramBotToken, telegramChannelId } from "./config/env";
 import { CronJob } from "cron";
 import { getMarket } from "./market";
 import { ProductIcon } from "./constants";
@@ -29,8 +26,7 @@ bot.start((ctx) =>
   ),
 );
 
-async function postMarketUpdate() {
-  const currentDate = new Date();
+function craftMessage(currentDate: Date) {
   const formattedDate = currentDate.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -45,6 +41,7 @@ async function postMarketUpdate() {
   let biggestIncrease = { name: "", change: 0 };
 
   const market = getMarket(currentDate);
+
   for (const product of market.products) {
     const priceDiff = product.price - product.previousPrice;
     const changePercent = (priceDiff / product.previousPrice) * 100;
@@ -64,36 +61,39 @@ async function postMarketUpdate() {
     if (changePercent > biggestIncrease.change) {
       biggestIncrease = { name: product.name, change: changePercent };
     }
-  };
+  }
 
   message += "</pre>\n\n";
+  message += `<i>*Base buy price does not include your personal discount.</i>\n\n`;
 
   if (biggestDecrease.change < -10) {
     message += `💡 <b>${
       biggestDecrease.name
-    }</b> is cheap today (${biggestDecrease.change.toFixed(
-      2,
-    )}% down).\n\n`;
+    }</b> is cheap today (${biggestDecrease.change.toFixed(2)}% down).\n\n`;
   }
   if (biggestIncrease.change > 10) {
     message += `🚀 <b>${
       biggestIncrease.name
-    }</b> price is rocketing (${biggestIncrease.change.toFixed(
-      2,
-    )}% up).\n\n`;
+    }</b> price is rocketing (${biggestIncrease.change.toFixed(2)}% up).\n\n`;
   }
-
-  await bot.telegram.sendMessage(telegramChannelId, message, { parse_mode: "HTML" });
+  return message;
 }
 
-// Update the cron schedule to run at 22:42 every day
-const job = new CronJob(
-  "1 0 * * *",
-  () => {
-    console.log("Cron job triggered");
-    postMarketUpdate();
-  },
-);
+async function postMarketUpdate() {
+  const today = new Date();
+
+  const message = craftMessage(today);
+  await bot.telegram.sendMessage(telegramChannelId, message, {
+    parse_mode: "HTML",
+  });
+}
+// @note let's do a message push when we release so it's sent to the chat
+postMarketUpdate();
+
+const job = new CronJob("1 0 * * *", () => {
+  console.log("Cron job triggered");
+  postMarketUpdate();
+});
 
 bot.launch();
 console.log("Bot started successfully");
