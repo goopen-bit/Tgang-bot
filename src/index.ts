@@ -26,7 +26,7 @@ bot.start((ctx) =>
   ),
 );
 
-async function postMessage(currentDate: Date) {
+function craftMessage(currentDate: Date) {
   const formattedDate = currentDate.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -64,6 +64,7 @@ async function postMessage(currentDate: Date) {
   }
 
   message += "</pre>\n\n";
+  message += `<i>*Base buy price does not include your personal discount.</i>\n\n`;
 
   if (biggestDecrease.change < -10) {
     message += `💡 <b>${
@@ -75,32 +76,16 @@ async function postMessage(currentDate: Date) {
       biggestIncrease.name
     }</b> price is rocketing (${biggestIncrease.change.toFixed(2)}% up).\n\n`;
   }
-  message += `<i>*Base buy price does not include your personal discount.</i>\n\n`;
-  await bot.telegram.sendMessage(telegramChannelId, message, {
-    parse_mode: "HTML",
-  });
+  return message;
 }
 
 async function postMarketUpdate() {
   const today = new Date();
 
-  // // Post for yesterday
-  // const yesterday = new Date(today);
-  // yesterday.setDate(yesterday.getDate() - 1);
-  // await postMessage(yesterday);
-  // console.log(`---------------------------`);
-
-  // Post for today
-  await postMessage(today);
-  console.log(`---------------------------`);
-
-  // Post for the next 3 days
-  // for (let i = 1; i <= 3; i++) {
-  //   const futureDate = new Date(today);
-  //   futureDate.setDate(futureDate.getDate() + i);
-  //   await postMessage(futureDate);
-  //   console.log(`---------------------------`);
-  // }
+  const message = craftMessage(today);
+  await bot.telegram.sendMessage(telegramChannelId, message, {
+    parse_mode: "HTML",
+  });
 }
 // @note let's do a message push when we release so it's sent to the chat
 postMarketUpdate();
