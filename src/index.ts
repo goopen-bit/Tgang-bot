@@ -5,8 +5,8 @@ import { getMarket } from "./market";
 import { ProductIcon } from "./constants";
 
 const bot = new Telegraf(telegramBotToken);
-bot.start(async (ctx) =>
-  await ctx.replyWithPhoto(
+bot.start((ctx) =>
+  ctx.replyWithPhoto(
     { url: "https://i.ibb.co/tpvjzq6/telegram-app-baner.png" },
     {
       caption:
