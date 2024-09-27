@@ -5,8 +5,8 @@ import { getMarket } from "./market";
 import { ProductIcon } from "./constants";
 
 const bot = new Telegraf(telegramBotToken);
-bot.start((ctx) =>
-  ctx.replyWithPhoto(
+bot.start(async (ctx) =>
+  await ctx.replyWithPhoto(
     { url: "https://i.ibb.co/tpvjzq6/telegram-app-baner.png" },
     {
       caption:
@@ -64,7 +64,7 @@ function craftMessage(currentDate: Date) {
   }
 
   message += "</pre>\n\n";
-  message += `<i>*Base buy price does not include your personal discount.</i>\n\n`;
+  message += "<i>*Base buy price does not include your personal discount.</i>\n\n";
 
   if (biggestDecrease.change < -10) {
     message += `💡 <b>${
@@ -91,6 +91,10 @@ async function postMarketUpdate() {
 const job = new CronJob("1 0 * * *", () => {
   console.log("Cron job triggered");
   postMarketUpdate();
+});
+
+bot.catch((err) => {
+  console.error("Error in bot", err);
 });
 
 bot.launch();
